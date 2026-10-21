@@ -478,8 +478,9 @@ func TestNewEmbedded_GetTLSCertificateRSA(t *testing.T) {
 	a, err := NewEmbedded(WithX509RootBundle(caPEM), WithX509Signer(crt, key.(crypto.Signer)))
 	assert.FatalError(t, err)
 
-	a.config.TLSKey = &config.TLSKeyOptions{Type: "RSA", Size: 3072}
-	assert.FatalError(t, a.config.TLSKey.Validate())
+	// NewEmbedded never validates the config, so the options reach
+	// GetTLSCertificate un-normalized.
+	a.config.TLSKey = &config.TLSKeyOptions{Type: "rsa", Size: 3072}
 
 	cert, err := a.GetTLSCertificate()
 	assert.FatalError(t, err)

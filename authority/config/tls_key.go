@@ -17,6 +17,9 @@ import (
 // trusted hierarchy:
 //
 //	"tlsKey": {"type": "RSA", "size": 3072}
+//
+// It is local configuration only: linkedca has no field for it, so
+// `step-ca export` omits it and it must be reapplied after a migration.
 type TLSKeyOptions struct {
 	// Type is the key type: "EC", "RSA" or "OKP".
 	Type string `json:"type"`
@@ -81,9 +84,17 @@ func (o *TLSKeyOptions) Validate() error {
 
 // GenerateKey returns a new private key for the CA's TLS certificate. A nil
 // receiver generates keyutil's default key.
+//
+// The options are validated on a copy first, so callers that never ran
+// Config.Validate (NewEmbedded with WithConfig, SkipValidation) get the same
+// defaults and rejections without the receiver being modified.
 func (o *TLSKeyOptions) GenerateKey() (crypto.PrivateKey, error) {
 	if o == nil {
 		return keyutil.GenerateDefaultKey()
 	}
-	return keyutil.GenerateKey(o.Type, o.Curve, o.Size)
+	opts := *o
+	if err := opts.Validate(); err != nil {
+		return nil, err
+	}
+	return keyutil.GenerateKey(opts.Type, opts.Curve, opts.Size)
 }

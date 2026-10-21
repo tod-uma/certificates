@@ -75,14 +75,66 @@ func TestTLSKeyOptions_GenerateKey(t *testing.T) {
 				t.Errorf("GenerateKey() = %T, want ed25519.PrivateKey", key)
 			}
 		}},
+		// Unvalidated options, as left by NewEmbedded(WithConfig(...)) or
+		// SkipValidation: defaults must be applied at generation time.
+		{"unvalidated lowercase rsa 3072", &TLSKeyOptions{Type: "rsa", Size: 3072}, func(t *testing.T, key any) {
+			k, ok := key.(*rsa.PrivateKey)
+			if !ok || k.N.BitLen() != 3072 {
+				t.Errorf("GenerateKey() = %T, want 3072-bit *rsa.PrivateKey", key)
+			}
+		}},
+		{"unvalidated rsa default size", &TLSKeyOptions{Type: "RSA"}, func(t *testing.T, key any) {
+			k, ok := key.(*rsa.PrivateKey)
+			if !ok || k.N.BitLen() != 2048 {
+				t.Errorf("GenerateKey() = %T, want 2048-bit *rsa.PrivateKey", key)
+			}
+		}},
+		{"unvalidated ec default curve", &TLSKeyOptions{Type: "EC"}, func(t *testing.T, key any) {
+			k, ok := key.(*ecdsa.PrivateKey)
+			if !ok || k.Curve != elliptic.P256() {
+				t.Errorf("GenerateKey() = %T, want *ecdsa.PrivateKey on P-256", key)
+			}
+		}},
+		{"unvalidated okp default curve", &TLSKeyOptions{Type: "okp"}, func(t *testing.T, key any) {
+			if _, ok := key.(ed25519.PrivateKey); !ok {
+				t.Errorf("GenerateKey() = %T, want ed25519.PrivateKey", key)
+			}
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var before TLSKeyOptions
+			if tt.opts != nil {
+				before = *tt.opts
+			}
 			key, err := tt.opts.GenerateKey()
 			if err != nil {
 				t.Fatalf("TLSKeyOptions.GenerateKey() error = %v", err)
 			}
 			tt.check(t, key)
+			if tt.opts != nil && *tt.opts != before {
+				t.Errorf("GenerateKey() modified its receiver: got %+v, want %+v", *tt.opts, before)
+			}
+		})
+	}
+}
+
+func TestTLSKeyOptions_GenerateKeyInvalid(t *testing.T) {
+	tests := []struct {
+		name string
+		opts *TLSKeyOptions
+	}{
+		{"empty type", &TLSKeyOptions{}},
+		{"rsa with curve", &TLSKeyOptions{Type: "RSA", Curve: "P-384", Size: 2048}},
+		{"rsa too small", &TLSKeyOptions{Type: "RSA", Size: 1024}},
+		{"ec with size", &TLSKeyOptions{Type: "EC", Size: 3072}},
+		{"okp x25519", &TLSKeyOptions{Type: "OKP", Curve: "X25519"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if key, err := tt.opts.GenerateKey(); err == nil {
+				t.Errorf("TLSKeyOptions.GenerateKey() = %T, want error", key)
+			}
 		})
 	}
 }
