@@ -21,7 +21,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"go.step.sm/crypto/jose"
-	"go.step.sm/crypto/keyutil"
 	"go.step.sm/crypto/pemutil"
 	"go.step.sm/crypto/x509util"
 
@@ -887,8 +886,8 @@ func (a *Authority) GetTLSCertificate() (*tls.Certificate, error) {
 		return nil, errs.Wrap(http.StatusInternalServerError, err, "authority.GetTLSCertificate")
 	}
 
-	// Generate default key.
-	priv, err := keyutil.GenerateDefaultKey()
+	// Generate the configured key type, or the default key if unset.
+	priv, err := a.config.TLSKey.GenerateKey()
 	if err != nil {
 		return fatal(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -463,6 +464,30 @@ func TestNewEmbedded_GetTLSCertificate(t *testing.T) {
 	assert.Equals(t, []string{"localhost"}, cert.Leaf.DNSNames)
 	assert.True(t, cert.Leaf.IPAddresses[0].Equal(net.ParseIP("127.0.0.1")))
 	assert.True(t, cert.Leaf.IPAddresses[1].Equal(net.ParseIP("::1")))
+}
+
+func TestNewEmbedded_GetTLSCertificateRSA(t *testing.T) {
+	caPEM, err := os.ReadFile("testdata/certs/root_ca.crt")
+	assert.FatalError(t, err)
+
+	crt, err := pemutil.ReadCertificate("testdata/certs/intermediate_ca.crt")
+	assert.FatalError(t, err)
+	key, err := pemutil.Read("testdata/secrets/intermediate_ca_key", pemutil.WithPassword([]byte("pass")))
+	assert.FatalError(t, err)
+
+	a, err := NewEmbedded(WithX509RootBundle(caPEM), WithX509Signer(crt, key.(crypto.Signer)))
+	assert.FatalError(t, err)
+
+	a.config.TLSKey = &config.TLSKeyOptions{Type: "RSA", Size: 3072}
+	assert.FatalError(t, a.config.TLSKey.Validate())
+
+	cert, err := a.GetTLSCertificate()
+	assert.FatalError(t, err)
+	pub, ok := cert.Leaf.PublicKey.(*rsa.PublicKey)
+	assert.True(t, ok)
+	assert.Equals(t, 3072, pub.N.BitLen())
+	_, ok = cert.PrivateKey.(*rsa.PrivateKey)
+	assert.True(t, ok)
 }
 
 func TestAuthority_CloseForReload(t *testing.T) {

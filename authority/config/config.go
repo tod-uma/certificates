@@ -79,6 +79,7 @@ type Config struct {
 	Monitoring       json.RawMessage      `json:"monitoring,omitempty"`
 	AuthorityConfig  *AuthConfig          `json:"authority,omitempty"`
 	TLS              *TLSOptions          `json:"tls,omitempty"`
+	TLSKey           *TLSKeyOptions       `json:"tlsKey,omitempty"`
 	Password         string               `json:"password,omitempty"`
 	Templates        *templates.Templates `json:"templates,omitempty"`
 	CommonName       string               `json:"commonName,omitempty"`
@@ -350,6 +351,11 @@ func (c *Config) Validate() error {
 			return errors.New("tls minVersion cannot exceed tls maxVersion")
 		}
 		c.TLS.Renegotiation = c.TLS.Renegotiation || DefaultTLSOptions.Renegotiation
+	}
+
+	// Validate the CA's TLS key options, nil is ok.
+	if err := c.TLSKey.Validate(); err != nil {
+		return err
 	}
 
 	// Validate KMS options, nil is ok.
