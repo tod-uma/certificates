@@ -2174,3 +2174,24 @@ func TestAuthority_GetX509Signer(t *testing.T) {
 		})
 	}
 }
+
+func Test_describeKey(t *testing.T) {
+	tests := []struct {
+		kty, crv string
+		size     int
+		want     string
+	}{
+		{"EC", "P-256", 0, "ECDSA-P256"},
+		{"EC", "P-384", 0, "ECDSA-P384"},
+		{"RSA", "", 3072, "RSA-3072"},
+		{"OKP", "Ed25519", 0, "Ed25519"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			pub, _, err := keyutil.GenerateKeyPair(tt.kty, tt.crv, tt.size)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, describeKey(pub))
+		})
+	}
+	assert.Equal(t, "[]uint8", describeKey([]byte("not a key")))
+}

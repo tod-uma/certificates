@@ -3,14 +3,20 @@ package authority
 import (
 	"context"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
@@ -880,6 +886,34 @@ func (a *Authority) GenerateCertificateRevocationList() error {
 	return nil
 }
 
+// describeKey returns a short description of a public key's type and size,
+// e.g. "RSA-3072", "ECDSA-P256" or "Ed25519", for log messages.
+func describeKey(pub crypto.PublicKey) string {
+	switch k := pub.(type) {
+	case *rsa.PublicKey:
+		return fmt.Sprintf("RSA-%d", k.N.BitLen())
+	case *ecdsa.PublicKey:
+		return "ECDSA-" + strings.ReplaceAll(k.Curve.Params().Name, "-", "")
+	case ed25519.PublicKey:
+		return "Ed25519"
+	default:
+		return fmt.Sprintf("%T", pub)
+	}
+}
+
+// spkiSHA256 returns the hex SHA-256 of a public key's DER SubjectPublicKeyInfo,
+// matching `openssl x509 -pubkey -noout | openssl pkey -pubin -outform DER |
+// sha256sum` on the issued certificate, so the logged key can be matched to the
+// certificate the CA ends up serving.
+func spkiSHA256(pub crypto.PublicKey) string {
+	der, err := x509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return "unavailable"
+	}
+	sum := sha256.Sum256(der)
+	return hex.EncodeToString(sum[:])
+}
+
 // GetTLSCertificate creates a new leaf certificate to be used by the CA HTTPS server.
 func (a *Authority) GetTLSCertificate() (*tls.Certificate, error) {
 	fatal := func(err error) (*tls.Certificate, error) {
@@ -895,6 +929,8 @@ func (a *Authority) GetTLSCertificate() (*tls.Certificate, error) {
 	if !ok {
 		return fatal(errors.New("private key is not a crypto.Signer"))
 	}
+	log.Printf("Generated %s key for the CA TLS certificate (SPKI SHA-256 %s)",
+		describeKey(signer.Public()), spkiSHA256(signer.Public()))
 
 	// prepare the sans: IPv6 DNS hostname representations are converted to their IP representation
 	sans := make([]string, len(a.config.DNSNames))

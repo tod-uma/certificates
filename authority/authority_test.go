@@ -486,8 +486,10 @@ func TestNewEmbedded_GetTLSCertificateRSA(t *testing.T) {
 	pub, ok := cert.Leaf.PublicKey.(*rsa.PublicKey)
 	assert.True(t, ok)
 	assert.Equals(t, 3072, pub.N.BitLen())
-	_, ok = cert.PrivateKey.(*rsa.PrivateKey)
+	priv, ok := cert.PrivateKey.(*rsa.PrivateKey)
 	assert.True(t, ok)
+	// The logged fingerprint of the generated key must match the issued leaf.
+	assert.Equals(t, spkiSHA256(priv.Public()), spkiSHA256(cert.Leaf.PublicKey))
 }
 
 func TestAuthority_CloseForReload(t *testing.T) {
